@@ -59,7 +59,7 @@ export class MobileCustomEndpointSupervisor {
   setForeground(foreground: boolean): void {
     this.foreground = foreground
     if (!foreground) {
-      this.directProbe.clear()
+      this.directProbe.cancel()
       this.clearRetry()
       this.fallbackProbe?.abort()
     } else {

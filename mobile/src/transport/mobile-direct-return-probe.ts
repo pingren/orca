@@ -59,6 +59,10 @@ export class DirectReturnProbe {
 
   stop(): void {
     this.stopped = true
+    this.cancel()
+  }
+
+  cancel(): void {
     this.clear()
     this.activeProbe?.abort()
   }
@@ -93,7 +97,7 @@ export class DirectReturnProbe {
         12_000,
         controller.signal
       )
-      if (this.stopped) {
+      if (controller.signal.aborted) {
         return
       }
       if (!successful) {
@@ -108,9 +112,9 @@ export class DirectReturnProbe {
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
       try {
-        await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
+        await this.hooks.migrate(candidate.client, candidate.path, () => controller.signal.aborted)
       } catch {
-        if (!this.stopped) {
+        if (!controller.signal.aborted) {
           this.hooks.hysteresis.recordDirectFailure(this.deps.now())
         }
         return

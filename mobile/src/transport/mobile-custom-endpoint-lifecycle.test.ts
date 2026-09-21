@@ -170,6 +170,57 @@ describe('LAN roaming through a custom WebSocket endpoint', () => {
     )
   })
 
+  it('cancels discovery on background and ignores a late address response', async () => {
+    const { lifecycle, remote, logical } = start()
+    let resolveDiscovery: (response: RpcResponse) => void = () => {}
+    remote.sendRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDiscovery = resolve
+        })
+    )
+    await vi.advanceTimersByTimeAsync(15_000)
+    lifecycle.setForeground(false)
+    resolveDiscovery(discovered)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(connect).not.toHaveBeenCalled()
+    expect(remote.close).not.toHaveBeenCalled()
+    expect(logical.getGeneration()).toBe(1)
+    lifecycle.setForeground(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(logical.getGeneration()).toBe(2)
+  })
+
+  it('closes a pending LAN dial on background without replacing the remote session', async () => {
+    const { lifecycle, remote, logical } = start()
+    const candidate = new FakeSession('connecting')
+    vi.mocked(connect).mockReturnValue(candidate)
+    await vi.advanceTimersByTimeAsync(15_000)
+    lifecycle.setForeground(false)
+    candidate.publishState('connected')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(candidate.close).toHaveBeenCalledOnce()
+    expect(remote.close).not.toHaveBeenCalled()
+    expect(logical.getGeneration()).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('fences a LAN cutover when backgrounding races migration', async () => {
+    const { lifecycle, remote, logical, candidates } = start()
+    const migrate = logical.migrateTo.bind(logical)
+    vi.spyOn(logical, 'migrateTo').mockImplementationOnce(async (...args) => {
+      lifecycle.setForeground(false)
+      await migrate(...args)
+    })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(logical.getGeneration()).toBe(1)
+    expect(remote.close).not.toHaveBeenCalled()
+    expect(candidates.at(-1)!.close).toHaveBeenCalled()
+    lifecycle.setForeground(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(logical.getGeneration()).toBe(2)
+  })
+
   it('cancels a pending fallback dial when the host is removed', async () => {
     const { lifecycle, candidates, logical } = start()
     await vi.advanceTimersByTimeAsync(60_000)
