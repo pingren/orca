@@ -18087,5 +18087,11 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "mobile": {
+    "selfHostedRelay": {
+      "title": "Self-hosted Relay",
+      "description": "Phone can be on cellular or any Wi-Fi."
+    }
   }
 }

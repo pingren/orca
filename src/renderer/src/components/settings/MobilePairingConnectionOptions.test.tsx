@@ -79,6 +79,20 @@ describe('MobilePairingConnectionOptions', () => {
 
   afterEach(() => cleanup())
 
+  it('shows the self-hosted relay without asking for a cloud sign-in', async () => {
+    vi.mocked(window.api.mobile.getRelayStatus).mockResolvedValue({
+      status: 'standby',
+      selfHosted: true
+    })
+    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: /Self-hosted Relay/i })).toBeEnabled()
+    )
+    expect(screen.queryByTestId('anywhere-sign-in-panel')).not.toBeInTheDocument()
+    expect(screen.getByText('Available')).toBeVisible()
+    expect(connect).not.toHaveBeenCalled()
+  })
+
   it('shows Sign in directly under Orca Relay, above LAN', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()

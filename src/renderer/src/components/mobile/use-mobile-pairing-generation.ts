@@ -17,7 +17,7 @@ type MutableRef<T> = { current: T }
  */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
-  signedIn: boolean
+  relayAuthorized: boolean
   selectedAddress: string | undefined
   mountedRef: MutableRef<boolean>
   hasGeneratedRef: MutableRef<boolean>
@@ -39,7 +39,7 @@ export function useMobilePairingGeneration(params: {
 } {
   const {
     connectionMode,
-    signedIn,
+    relayAuthorized,
     selectedAddress,
     mountedRef,
     hasGeneratedRef,
@@ -60,7 +60,7 @@ export function useMobilePairingGeneration(params: {
       connectionModeOverride?: MobilePairingConnectionMode
     ) => {
       const preferredMode = connectionModeOverride ?? connectionMode
-      if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
+      if (!canMintMobilePairingOffer({ connectionMode: preferredMode, relayAuthorized })) {
         return
       }
       const requestId = ++pairingRequestIdRef.current
@@ -144,7 +144,7 @@ export function useMobilePairingGeneration(params: {
       setPairingUrl,
       setPairingQrError,
       setRelayMintFailure,
-      signedIn
+      relayAuthorized
     ]
   )
 

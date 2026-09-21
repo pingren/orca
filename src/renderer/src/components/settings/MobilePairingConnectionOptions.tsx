@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMobileRelayStatus } from '../mobile/use-mobile-relay-status'
+import { useRef } from 'react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
-import type {
-  MobileRelayStatus,
-  MobileRelayStatusDetail
-} from '../../../../shared/mobile-relay-status'
+import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 
@@ -66,17 +64,16 @@ export function MobilePairingConnectionOptions({
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
-  const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
-  const signedIn = authStatus?.state === 'connected'
+  const { status: relayStatus, cellUrl: relayCellUrl, selfHosted } = useMobileRelayStatus()
+  const relayAuthorized = selfHosted || authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
   // CTA would be dead. Treat that case as unavailable (matching the prior UI)
   // and only offer Sign in when the build can actually reach Relay.
   const configured = authStatus?.configured !== false
-  const needsSignIn = value === 'automatic' && !signedIn && configured
+  const needsSignIn = value === 'automatic' && !relayAuthorized && configured
   // Availability is a property of the build, not of the current selection.
-  const relayUnavailable = !signedIn && !configured
+  const relayUnavailable = !relayAuthorized && !configured
   const relayDisabled = relayMintRetrying || relayUnavailable
   const optionRefs = useRef<Record<MobilePairingConnectionMode, HTMLDivElement | null>>({
     automatic: null,
@@ -109,33 +106,6 @@ export function MobilePairingConnectionOptions({
 
   useOrcaProfileAuthStatusRefresh()
 
-  useEffect(() => {
-    let receivedEvent = false
-    let active = true
-    const apply = (detail: MobileRelayStatusDetail): void => {
-      setRelayStatus(detail.status)
-      setRelayCellUrl(detail.cellUrl)
-    }
-    const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
-      receivedEvent = true
-      if (active) {
-        apply(detail)
-      }
-    })
-    void window.api.mobile
-      .getRelayStatus()
-      .then((detail) => {
-        if (active && !receivedEvent) {
-          apply(detail)
-        }
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [])
-
   return (
     <div className={cn('space-y-2', compact && 'space-y-1.5')}>
       <div
@@ -157,20 +127,29 @@ export function MobilePairingConnectionOptions({
             optionRefs.current.automatic = el
           }}
           onSelect={() => onChange('automatic')}
-          title={translate(
-            'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
-            'Orca Relay'
-          )}
+          title={
+            selfHosted
+              ? translate('mobile.selfHostedRelay.title', 'Self-hosted Relay')
+              : translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
+                  'Orca Relay'
+                )
+          }
           description={
             relayUnavailable
               ? translate(
                   'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
                   'Orca Relay isn’t available in this build. Use LAN.'
                 )
-              : translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
-                  'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
-                )
+              : selfHosted
+                ? translate(
+                    'mobile.selfHostedRelay.description',
+                    'Phone can be on cellular or any Wi-Fi.'
+                  )
+                : translate(
+                    'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
+                    'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
+                  )
           }
           trailing={
             relayUnavailable ? (
@@ -180,7 +159,7 @@ export function MobilePairingConnectionOptions({
                   'Unavailable'
                 )}
               </Badge>
-            ) : signedIn && value === 'automatic' ? (
+            ) : relayAuthorized && value === 'automatic' ? (
               <Badge variant="outline" className="text-[11px]">
                 {relayMintRetrying
                   ? translate(

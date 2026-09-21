@@ -4,6 +4,7 @@ import { mainProcessState as state } from './main-process-state'
 export function getDesktopRelayStatus(): MobileRelayStatusDetail {
   return {
     status: state.desktopRelayStatus,
+    ...(state.desktopRelayService?.selfHosted ? { selfHosted: true } : {}),
     ...(state.desktopRelayCellUrl === undefined ? {} : { cellUrl: state.desktopRelayCellUrl })
   }
 }

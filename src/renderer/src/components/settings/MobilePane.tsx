@@ -1,3 +1,4 @@
+import { useMobileRelayAuthorization } from '../mobile/use-mobile-relay-status'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
@@ -42,12 +43,12 @@ export function MobilePane(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
-  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const relayAuthorized = useMobileRelayAuthorization()
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
-  const wasSignedInRef = useRef(signedIn)
+  const wasAuthorizedRef = useRef(relayAuthorized)
   // Why: monotonically bumped per pairing request so a late getPairingQR
   // response cannot paint a stale QR after sign-out, a mode switch, or an
   // address change invalidated the request that produced it.
@@ -118,12 +119,12 @@ export function MobilePane(): React.JSX.Element {
   // mint too, not just a displayed QR, so a late response can't paint a Relay
   // code after sign-out. Anywhere stays selected.
   useEffect(() => {
-    const wasSignedIn = wasSignedInRef.current
-    wasSignedInRef.current = signedIn
-    if (wasSignedIn && !signedIn && connectionMode === 'automatic') {
+    const wasAuthorized = wasAuthorizedRef.current
+    wasAuthorizedRef.current = relayAuthorized
+    if (wasAuthorized && !relayAuthorized && connectionMode === 'automatic') {
       invalidatePairing()
     }
-  }, [signedIn, connectionMode, invalidatePairing])
+  }, [relayAuthorized, connectionMode, invalidatePairing])
 
   const clearCodeCopiedResetTimer = useCallback((): void => {
     if (codeCopiedResetTimerRef.current !== null) {
@@ -177,7 +178,7 @@ export function MobilePane(): React.JSX.Element {
       const preferredMode = opts.connectionModeOverride ?? connectionMode
       // Why: refuse signed-out Anywhere rather than degrading to a local-only QR
       // under the Relay label (canMint is the shared honesty gate).
-      if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
+      if (!canMintMobilePairingOffer({ connectionMode: preferredMode, relayAuthorized })) {
         return
       }
       const requestId = ++pairingRequestIdRef.current
@@ -257,7 +258,7 @@ export function MobilePane(): React.JSX.Element {
       mountedRef,
       rotateNextQr,
       selectedAddress,
-      signedIn
+      relayAuthorized
     ]
   )
 
@@ -278,10 +279,7 @@ export function MobilePane(): React.JSX.Element {
       // main process rotates on the mode mismatch, so don't arm a second rotate.
       invalidatePairing({ armRotate: false })
       // Why: switching to LAN after a Relay failure should mint immediately.
-      if (
-        shouldRecoverWithLan &&
-        canMintMobilePairingOffer({ connectionMode: nextMode, signedIn })
-      ) {
+      if (shouldRecoverWithLan) {
         void generateQR({ rotate: false, connectionModeOverride: 'local-only' })
       }
     },
@@ -290,7 +288,6 @@ export function MobilePane(): React.JSX.Element {
       generateQR,
       invalidatePairing,
       relayMintFailure,
-      signedIn,
       updateSettings,
       setConnectionMode
     ]
@@ -394,7 +391,7 @@ export function MobilePane(): React.JSX.Element {
     <div className="space-y-6">
       <MobilePairingSetupSection
         connectionMode={connectionMode}
-        canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
+        canGenerate={canMintMobilePairingOffer({ connectionMode, relayAuthorized })}
         addressDisclosureForcedOpen={shouldOpenMobilePairingAddress(settingsSearchQuery)}
         connectionPathControl={
           <MobilePairingConnectionOptions

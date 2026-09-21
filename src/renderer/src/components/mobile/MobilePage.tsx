@@ -1,3 +1,4 @@
+import { useMobileRelayAuthorization } from './use-mobile-relay-status'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -38,7 +39,7 @@ export default function MobilePage(): React.JSX.Element {
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
-  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const relayAuthorized = useMobileRelayAuthorization()
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
@@ -91,7 +92,7 @@ export default function MobilePage(): React.JSX.Element {
 
   const { generatePairing } = useMobilePairingGeneration({
     connectionMode,
-    signedIn,
+    relayAuthorized,
     selectedAddress,
     mountedRef,
     hasGeneratedRef,
@@ -106,7 +107,7 @@ export default function MobilePage(): React.JSX.Element {
   })
   useLayoutEffect(() => {
     pairingAddressChangeRef.current = ({ address, source }) => {
-      const pairingContext = { connectionMode, signedIn }
+      const pairingContext = { connectionMode, relayAuthorized }
       if (source === 'user') {
         if (canMintMobilePairingOffer(pairingContext)) {
           void generatePairing(true, address ?? '')
@@ -132,7 +133,7 @@ export default function MobilePage(): React.JSX.Element {
         void generatePairing(true, address ?? '')
       }
     }
-  }, [connectionMode, generatePairing, pairLoading, signedIn])
+  }, [connectionMode, generatePairing, pairLoading, relayAuthorized])
 
   const handleConnectionModeChange = useCallback(
     (nextMode: MobilePairingConnectionMode): void => {
@@ -181,7 +182,7 @@ export default function MobilePage(): React.JSX.Element {
 
   useMobilePairingQrInvalidation({
     connectionMode,
-    signedIn,
+    relayAuthorized,
     pairLoading,
     hasGeneratedRef,
     pairingRequestIdRef,
@@ -232,7 +233,7 @@ export default function MobilePage(): React.JSX.Element {
 
   const beforeCustomAddressChange = useCallback(
     async (address: string): Promise<boolean> => {
-      if (!canMintMobilePairingOffer({ connectionMode, signedIn })) {
+      if (!canMintMobilePairingOffer({ connectionMode, relayAuthorized })) {
         return true
       }
       try {
@@ -242,7 +243,7 @@ export default function MobilePage(): React.JSX.Element {
         return false
       }
     },
-    [connectionMode, signedIn]
+    [connectionMode, relayAuthorized]
   )
 
   const copyPairingCode = useCallback(async () => {
@@ -269,7 +270,7 @@ export default function MobilePage(): React.JSX.Element {
   // Why: when Step 2 first becomes visible, mint a pairing offer so the
   // user sees a real QR immediately. Subsequent visits keep the existing
   // token unless they hit Regenerate.
-  const canGenerate = canMintMobilePairingOffer({ connectionMode, signedIn })
+  const canGenerate = canMintMobilePairingOffer({ connectionMode, relayAuthorized })
   useEffect(() => {
     if (stage !== 'flow' || stepIdx !== 1 || hasGeneratedRef.current) {
       return

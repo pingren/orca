@@ -15,7 +15,7 @@ type MutableRef<T> = { current: T }
  */
 export function useMobilePairingQrInvalidation(params: {
   connectionMode: MobilePairingConnectionMode
-  signedIn: boolean
+  relayAuthorized: boolean
   pairLoading: boolean
   hasGeneratedRef: MutableRef<boolean>
   pairingRequestIdRef: MutableRef<number>
@@ -29,7 +29,7 @@ export function useMobilePairingQrInvalidation(params: {
 }): void {
   const {
     connectionMode,
-    signedIn,
+    relayAuthorized,
     pairLoading,
     hasGeneratedRef,
     pairingRequestIdRef,
@@ -41,7 +41,7 @@ export function useMobilePairingQrInvalidation(params: {
     setRelayMintFailure,
     regenerate
   } = params
-  const wasSignedInRef = useRef(signedIn)
+  const wasAuthorizedRef = useRef(relayAuthorized)
   // Tracks the mode we last acted on so the mode effect can tell a cross-window
   // preference sync apart from an already-handled change.
   const handledModeRef = useRef(connectionMode)
@@ -51,9 +51,13 @@ export function useMobilePairingQrInvalidation(params: {
   // signing in mints Relay. Anywhere stays selected across both edges. Clear
   // loading too so a superseded in-flight generate can't leave a stuck spinner.
   useEffect(() => {
-    const wasSignedIn = wasSignedInRef.current
-    wasSignedInRef.current = signedIn
-    if (connectionMode !== 'automatic' || !hasGeneratedRef.current || wasSignedIn === signedIn) {
+    const wasAuthorized = wasAuthorizedRef.current
+    wasAuthorizedRef.current = relayAuthorized
+    if (
+      connectionMode !== 'automatic' ||
+      !hasGeneratedRef.current ||
+      wasAuthorized === relayAuthorized
+    ) {
       return
     }
     pairingRequestIdRef.current += 1
@@ -63,7 +67,7 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrDataUrl(null)
     setPairQrSize(null)
     setRelayMintFailure?.(null)
-    if (signedIn && canMintMobilePairingOffer({ connectionMode, signedIn })) {
+    if (relayAuthorized && canMintMobilePairingOffer({ connectionMode, relayAuthorized })) {
       // Why: rotate on the sign-in edge — the token behind the QR cleared at
       // sign-out may have been exposed, so the fresh session mints fresh.
       regenerate(connectionMode, { rotate: true })
@@ -72,7 +76,7 @@ export function useMobilePairingQrInvalidation(params: {
     }
   }, [
     connectionMode,
-    signedIn,
+    relayAuthorized,
     hasGeneratedRef,
     pairingRequestIdRef,
     setPairQrDataUrl,
@@ -103,7 +107,7 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrDataUrl(null)
     setPairQrSize(null)
     setRelayMintFailure?.(null)
-    if (shouldRegenerate && canMintMobilePairingOffer({ connectionMode, signedIn })) {
+    if (shouldRegenerate && canMintMobilePairingOffer({ connectionMode, relayAuthorized })) {
       // Why: no rotate here — the main process rotates exactly once when the
       // requested mode differs from the pending token's minted mode, so the
       // initiating window and windows reacting to a cross-window preference
@@ -115,7 +119,7 @@ export function useMobilePairingQrInvalidation(params: {
     }
   }, [
     connectionMode,
-    signedIn,
+    relayAuthorized,
     pairLoading,
     hasGeneratedRef,
     pairingRequestIdRef,

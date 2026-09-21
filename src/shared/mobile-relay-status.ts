@@ -16,6 +16,7 @@ export type MobileRelayStatus = (typeof MOBILE_RELAY_STATUSES)[number]
 export type MobileRelayStatusDetail = {
   status: MobileRelayStatus
   cellUrl?: string
+  selfHosted?: boolean
 }
 
 // A cell only describes a host that is actually reachable on it. A connecting or

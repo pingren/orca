@@ -1,3 +1,4 @@
+import { getSelfHostedRelayConfig } from '../runtime/relay/self-hosted-relay-config'
 import { app, powerMonitor, type BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
@@ -253,10 +254,12 @@ async function launchDesktopMode(
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
+  try {
+    const selfHosted = getSelfHostedRelayConfig(process.env, app.isPackaged)
+    if (cloudAuth.configured || selfHosted) {
       const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
+        authConfig: cloudAuth.configured ? cloudAuth.config : undefined,
+        selfHosted,
         userDataPath: getProfileUserDataPath(),
         appVersion: app.getVersion(),
         runtimeRpc,
@@ -274,12 +277,12 @@ async function launchDesktopMode(
       // Why: sleeping past relay-token expiry kills the broker with no retry
       // timer; resume is the moment that state becomes recoverable.
       powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
     }
+  } catch (error) {
+    console.warn(
+      '[relay] Desktop relay startup unavailable:',
+      error instanceof Error ? error.message : String(error)
+    )
   }
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
