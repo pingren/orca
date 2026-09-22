@@ -93,36 +93,47 @@ describe('MobilePairingConnectionOptions', () => {
     expect(connect).not.toHaveBeenCalled()
   })
 
-  it('shows Sign in directly under Orca Relay, above LAN', async () => {
-    const user = userEvent.setup()
-    const onChange = vi.fn()
-    render(<MobilePairingConnectionOptions value="automatic" onChange={onChange} />)
+  it.each([undefined, false])(
+    'keeps official Relay sign-in when selfHosted is %s',
+    async (selfHosted) => {
+      vi.mocked(window.api.mobile.getRelayStatus).mockResolvedValue({
+        status: 'standby',
+        selfHosted
+      })
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+      render(<MobilePairingConnectionOptions value="automatic" onChange={onChange} />)
+      await waitFor(() => expect(window.api.mobile.getRelayStatus).toHaveBeenCalledOnce())
 
-    const relay = screen.getByRole('radio', { name: /Orca Relay/i })
-    const lan = screen.getByRole('radio', { name: /^LAN\b/i })
-    const signInPanel = screen.getByTestId('anywhere-sign-in-panel')
-    const signIn = screen.getByRole('button', { name: 'Sign in for Relay' })
-    expect(signInPanel).toBeVisible()
-    expect(screen.getByText('Relay only — LAN does not need an account.')).toBeVisible()
-    // Why: CTA must sit between Relay and LAN so it is not buried under LAN.
-    expect(
-      relay.compareDocumentPosition(signInPanel) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy()
-    expect(signInPanel.compareDocumentPosition(lan) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // Why: `radiogroup` only permits `radio` children. The panel is layout-only,
-    // so it must stay role-less rather than declaring a `group` the group cannot
-    // own — and its label must not double-announce the button it wraps.
-    const group = screen.getByRole('radiogroup')
-    expect(within(group).queryAllByRole('group')).toHaveLength(0)
-    expect(within(group).getAllByRole('radio')).toHaveLength(2)
-    expect(signInPanel).not.toHaveAttribute('aria-label')
-    // Why: do not surface build-setup diagnostics in the pairing flow.
-    expect(screen.queryByText(/not configured for this build/i)).toBeNull()
+      const relay = screen.getByRole('radio', { name: /Orca Relay/i })
+      const lan = screen.getByRole('radio', { name: /^LAN\b/i })
+      const signInPanel = screen.getByTestId('anywhere-sign-in-panel')
+      const signIn = screen.getByRole('button', { name: 'Sign in for Relay' })
+      expect(signInPanel).toBeVisible()
+      expect(screen.queryByRole('radio', { name: /Self-hosted Relay/i })).not.toBeInTheDocument()
+      expect(screen.getByText('Relay only — LAN does not need an account.')).toBeVisible()
+      // Why: CTA must sit between Relay and LAN so it is not buried under LAN.
+      expect(
+        relay.compareDocumentPosition(signInPanel) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+      expect(
+        signInPanel.compareDocumentPosition(lan) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+      // Why: `radiogroup` only permits `radio` children. The panel is layout-only,
+      // so it must stay role-less rather than declaring a `group` the group cannot
+      // own — and its label must not double-announce the button it wraps.
+      const group = screen.getByRole('radiogroup')
+      expect(within(group).queryAllByRole('group')).toHaveLength(0)
+      expect(within(group).getAllByRole('radio')).toHaveLength(2)
+      expect(signInPanel).not.toHaveAttribute('aria-label')
+      // Why: do not surface build-setup diagnostics in the pairing flow.
+      expect(screen.queryByText(/not configured for this build/i)).toBeNull()
 
-    await user.click(signIn)
-    expect(onChange).toHaveBeenCalledWith('automatic')
-    expect(connect).toHaveBeenCalledOnce()
-  })
+      await user.click(signIn)
+      expect(onChange).toHaveBeenCalledWith('automatic')
+      expect(connect).toHaveBeenCalledOnce()
+    }
+  )
 
   it('hides Sign in when LAN is selected', () => {
     render(<MobilePairingConnectionOptions value="local-only" onChange={vi.fn()} />)

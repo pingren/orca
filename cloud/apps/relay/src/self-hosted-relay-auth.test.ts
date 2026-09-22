@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import { SignJWT } from 'jose'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { loadRelayConfig } from './config.js'
 import { createRelayTokenVerifier, selfHostedRelaySigningKey } from './relay-token-verifier.js'
@@ -69,11 +69,27 @@ describe('self-hosted Relay authorization', () => {
 
   it('keeps cloud administration disabled, including for the owner key', async () => {
     const { app } = setup()
+    const drain = vi.fn()
+    app.post('/v1/admin/drain', (context) => {
+      drain()
+      return context.json({ ok: true })
+    })
     const response = await app.request('/v1/admin/drain', {
       method: 'POST',
       headers: { authorization: `Bearer ${environment.ORCA_RELAY_SELF_HOSTED_KEY}` }
     })
     expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ error: 'not_found' })
+    expect(drain).not.toHaveBeenCalled()
+  })
+
+  it('rejects an owner key that also grants assignment signing authority', () => {
+    expect(() =>
+      loadRelayConfig({
+        ...environment,
+        ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: environment.ORCA_RELAY_SELF_HOSTED_KEY
+      })
+    ).toThrow('self-hosted relay requires different owner and signing keys')
   })
 
   it('rejects expired tokens, other audiences and assignment signing keys', async () => {

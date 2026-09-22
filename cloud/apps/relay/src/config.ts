@@ -139,6 +139,9 @@ const EnvSchema = z.object({
 
 function validateAuthentication(env: z.infer<typeof EnvSchema>): void {
   if (env.ORCA_RELAY_SELF_HOSTED_KEY) {
+    if (env.ORCA_RELAY_SELF_HOSTED_KEY === env.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
+      throw new Error('self-hosted relay requires different owner and signing keys')
+    }
     if (
       env.ORCA_RELAY_ROLE !== 'combined' ||
       env.ORCA_RELAY_PUBLIC_URL !== env.ORCA_RELAY_CELL_URL

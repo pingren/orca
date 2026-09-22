@@ -62,6 +62,7 @@ it('pairs, exchanges encrypted RPC, resumes and revokes through a self-hosted re
     }
     const connectSocket = (url: string, headers?: Record<string, string>) => {
       const parsed = new URL(url)
+      expect(parsed.protocol).toBe('wss:')
       expect(parsed.host).toBe(new URL(origin).host)
       const socket = new WebSocket(`ws://127.0.0.1:${address.port}${parsed.pathname}`, { headers })
       sockets.add(socket)

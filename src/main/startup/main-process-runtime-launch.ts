@@ -255,6 +255,7 @@ async function launchDesktopMode(
   startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
   try {
+    // Explicit self-hosting must not silently fall back to Cloud if its configuration is invalid.
     const selfHosted = getSelfHostedRelayConfig(process.env, app.isPackaged)
     if (cloudAuth.configured || selfHosted) {
       const relayService = new DesktopRelayService({

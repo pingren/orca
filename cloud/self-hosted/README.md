@@ -63,6 +63,11 @@ before launching `Orca.exe`. Quit an already-running instance first so the new
 process receives them. For subsequent launches, keep them in a private launcher
 or the environment used by your desktop session.
 
+Without these variables, **Orca Relay** and its **Sign in for Relay** action stay
+unchanged. Explicit self-hosted configuration selects the self-hosted provider;
+invalid or incomplete values disable Relay startup instead of falling back to
+Cloud. Remove both variables and relaunch to return to the official provider.
+
 Open **Settings → Mobile**, select **Self-hosted Relay**, and generate a pairing
 code. Scan it with an Orca mobile release that supports Relay v2. Android and iOS
 use their existing Relay transport; no mobile protocol change is needed.
