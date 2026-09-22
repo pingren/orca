@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os'
 import {
   isPairingDirectEndpoint,
   MAX_PAIRING_DIRECT_ENDPOINTS,
@@ -6,8 +7,45 @@ import {
 import { isPairingWildcardHostname } from '../../shared/network/pairing-url'
 import { isVirtualBridgeInterface } from '../../shared/pairing-address-auto-selection'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
-import { getPairingNetworkInterfaces } from './pairing-network-interfaces'
+import { getPairingNetworkInterfaces, type NetworkInterface } from './pairing-network-interfaces'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
+
+const INTERFACE_CACHE_TTL_MS = 60_000
+let interfaceCache: {
+  snapshot: string
+  expiresAt: number
+  request: Promise<NetworkInterface[]>
+} | null = null
+
+function readDiscoveryInterfaces(): Promise<NetworkInterface[]> {
+  const currentInterfaces = networkInterfaces()
+  const snapshot = JSON.stringify(currentInterfaces)
+  const cacheable = Object.keys(currentInterfaces).some((name) => /^vEthernet /i.test(name))
+  if (!cacheable) {
+    return getPairingNetworkInterfaces()
+  }
+  if (interfaceCache?.snapshot === snapshot && Date.now() < interfaceCache.expiresAt) {
+    return interfaceCache.request
+  }
+  // Share Windows route inspection across phones; a changed adapter/address bypasses the TTL.
+  const entry = {
+    snapshot,
+    expiresAt: Number.POSITIVE_INFINITY,
+    request: getPairingNetworkInterfaces()
+  }
+  interfaceCache = entry
+  void entry.request.then(
+    () => {
+      entry.expiresAt = Date.now() + INTERFACE_CACHE_TTL_MS
+    },
+    () => {
+      if (interfaceCache === entry) {
+        interfaceCache = null
+      }
+    }
+  )
+  return entry.request
+}
 
 export async function resolvePairingDirectEndpoints(
   boundEndpoint: string | null
@@ -23,7 +61,7 @@ export async function resolvePairingDirectEndpoints(
     return result
   }
   const seen = new Set<string>()
-  for (const iface of await getPairingNetworkInterfaces()) {
+  for (const iface of await readDiscoveryInterfaces()) {
     if (isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)) {
       continue
     }

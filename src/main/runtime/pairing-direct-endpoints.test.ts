@@ -1,11 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolvePairingDirectEndpoints } from './pairing-direct-endpoints'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { networkInterfaces } from 'node:os'
+import type { PairingGetDirectEndpointsResult } from '../../shared/pairing-direct-endpoints'
 import { getPairingNetworkInterfaces } from './pairing-network-interfaces'
 
 vi.mock('./pairing-network-interfaces', () => ({ getPairingNetworkInterfaces: vi.fn() }))
+vi.mock('node:os', () => ({ networkInterfaces: vi.fn() }))
+
+let resolvePairingDirectEndpoints: (
+  boundEndpoint: string | null
+) => Promise<PairingGetDirectEndpointsResult>
 
 describe('advertising reachable direct listeners', () => {
-  beforeEach(() => vi.resetAllMocks())
+  beforeEach(async () => {
+    vi.resetAllMocks()
+    vi.resetModules()
+    vi.useFakeTimers()
+    vi.mocked(networkInterfaces).mockReturnValue({})
+    ;({ resolvePairingDirectEndpoints } = await import('./pairing-direct-endpoints'))
+  })
+  afterEach(() => vi.useRealTimers())
 
   it('filters host-local adapters and non-unicast addresses while retaining an external Hyper-V switch', async () => {
     vi.mocked(getPairingNetworkInterfaces).mockResolvedValue([
@@ -74,5 +87,125 @@ describe('advertising reachable direct listeners', () => {
   it('does not enumerate interfaces when there is no listener', async () => {
     await expect(resolvePairingDirectEndpoints(null)).resolves.toEqual({ v: 1, endpoints: [] })
     expect(getPairingNetworkInterfaces).not.toHaveBeenCalled()
+  })
+
+  it('shares route inspection across concurrent phones and repeated 15-second probes', async () => {
+    vi.mocked(networkInterfaces).mockReturnValue({
+      'vEthernet (WSL)': [
+        {
+          address: '172.25.0.1',
+          netmask: '255.255.0.0',
+          family: 'IPv4',
+          mac: '00:00:00:00:00:00',
+          internal: false,
+          cidr: '172.25.0.1/16'
+        }
+      ]
+    })
+    let finish: (
+      interfaces: Awaited<ReturnType<typeof getPairingNetworkInterfaces>>
+    ) => void = () => {}
+    vi.mocked(getPairingNetworkInterfaces).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const first = resolvePairingDirectEndpoints('ws://0.0.0.0:6768')
+    const second = resolvePairingDirectEndpoints('ws://0.0.0.0:6769')
+    expect(getPairingNetworkInterfaces).toHaveBeenCalledOnce()
+    finish([{ name: 'en0', address: '192.168.1.20' }])
+    expect((await first).endpoints[0]?.url).toBe('ws://192.168.1.20:6768')
+    expect((await second).endpoints[0]?.url).toBe('ws://192.168.1.20:6769')
+    for (let poll = 0; poll < 3; poll++) {
+      vi.advanceTimersByTime(15_000)
+      await resolvePairingDirectEndpoints('ws://0.0.0.0:6768')
+    }
+    expect(getPairingNetworkInterfaces).toHaveBeenCalledOnce()
+    vi.mocked(getPairingNetworkInterfaces).mockResolvedValue([])
+    vi.advanceTimersByTime(15_000)
+    expect((await resolvePairingDirectEndpoints('ws://0.0.0.0:6768')).endpoints).toEqual([])
+    expect(getPairingNetworkInterfaces).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes on an address change before the TTL and ignores an older in-flight result', async () => {
+    vi.mocked(networkInterfaces).mockReturnValue({
+      'vEthernet (WSL)': [
+        {
+          address: '172.25.0.1',
+          netmask: '255.255.0.0',
+          family: 'IPv4',
+          mac: '00:00:00:00:00:00',
+          internal: false,
+          cidr: '172.25.0.1/16'
+        }
+      ]
+    })
+    let finish: (
+      interfaces: Awaited<ReturnType<typeof getPairingNetworkInterfaces>>
+    ) => void = () => {}
+    vi.mocked(getPairingNetworkInterfaces).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const oldRequest = resolvePairingDirectEndpoints('ws://0.0.0.0:6768')
+    vi.mocked(networkInterfaces).mockReturnValue({
+      'vEthernet (WSL)': [
+        {
+          address: '172.25.0.2',
+          netmask: '255.255.0.0',
+          family: 'IPv4',
+          mac: '00:00:00:00:00:00',
+          internal: false,
+          cidr: '172.25.0.2/16'
+        }
+      ],
+      en0: [
+        {
+          address: '10.20.30.40',
+          netmask: '255.255.255.0',
+          family: 'IPv4',
+          mac: '00:00:00:00:00:00',
+          internal: false,
+          cidr: '10.20.30.40/24'
+        }
+      ]
+    })
+    vi.mocked(getPairingNetworkInterfaces).mockResolvedValue([
+      { name: 'en0', address: '10.20.30.40' }
+    ])
+    expect((await resolvePairingDirectEndpoints('ws://0.0.0.0:6768')).endpoints[0]?.url).toBe(
+      'ws://10.20.30.40:6768'
+    )
+    finish([{ name: 'en0', address: '192.168.1.20' }])
+    await oldRequest
+    expect((await resolvePairingDirectEndpoints('ws://0.0.0.0:6768')).endpoints[0]?.url).toBe(
+      'ws://10.20.30.40:6768'
+    )
+    expect(getPairingNetworkInterfaces).toHaveBeenCalledTimes(2)
+  })
+
+  it('bounds retries when Windows route inspection returns no reachable adapters', async () => {
+    vi.mocked(networkInterfaces).mockReturnValue({
+      'vEthernet (WSL)': [
+        {
+          address: '172.25.0.1',
+          netmask: '255.255.0.0',
+          family: 'IPv4',
+          mac: '00:00:00:00:00:00',
+          internal: false,
+          cidr: '172.25.0.1/16'
+        }
+      ]
+    })
+    vi.mocked(getPairingNetworkInterfaces).mockResolvedValue([
+      { name: 'vEthernet (Unknown)', address: '192.168.1.20' }
+    ])
+    expect((await resolvePairingDirectEndpoints('ws://0.0.0.0:6768')).endpoints).toEqual([])
+    vi.advanceTimersByTime(15_000)
+    expect((await resolvePairingDirectEndpoints('ws://0.0.0.0:6768')).endpoints).toEqual([])
+    expect(getPairingNetworkInterfaces).toHaveBeenCalledOnce()
   })
 })
