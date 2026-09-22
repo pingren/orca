@@ -1,4 +1,5 @@
 import type WebSocket from 'ws'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import type { MobileRelayStatus } from '../../../shared/mobile-relay-status'
 import type { E2EEKeypair } from '../e2ee-keypair'
@@ -28,6 +29,7 @@ export type RelaySessionBrokerOptions = {
   keypair: E2EEKeypair
   appVersion: string
   mobileSocketWiring: MobileSocketWiring
+  relayProvider?: MobileRelayProvider
   isCurrent: () => boolean
   refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>

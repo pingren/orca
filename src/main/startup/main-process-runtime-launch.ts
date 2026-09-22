@@ -1,4 +1,3 @@
-import { getSelfHostedRelayConfig } from '../runtime/relay/self-hosted-relay-config'
 import { app, powerMonitor, type BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
@@ -15,7 +14,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus, publishDesktopRelayStatus } from './main-process-relay-status'
-import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import { DesktopRelayProviders } from '../runtime/relay/desktop-relay-providers'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
@@ -97,6 +96,17 @@ function installRuntimeRpc(
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
+    configureSelfHostedRelay: (settings) => {
+      const service = state.desktopRelayService
+      if (!service) {
+        throw new Error('Relay is not ready. Try again after startup.')
+      }
+      if (settings) {
+        service.saveSelfHosted(settings)
+      } else {
+        service.removeSelfHosted()
+      }
+    },
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
       if (
         !state.mainWindow ||
@@ -255,30 +265,19 @@ async function launchDesktopMode(
   startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
   try {
-    // Explicit self-hosting must not silently fall back to Cloud if its configuration is invalid.
-    const selfHosted = getSelfHostedRelayConfig(process.env, app.isPackaged)
-    if (cloudAuth.configured || selfHosted) {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.configured ? cloudAuth.config : undefined,
-        selfHosted,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: publishDesktopRelayStatus
-      })
-      state.desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-    }
+    const relayService = new DesktopRelayProviders({
+      authConfig: cloudAuth.configured ? cloudAuth.config : undefined,
+      userDataPath: getProfileUserDataPath(),
+      settingsPath: getCanonicalUserDataPath(),
+      packaged: app.isPackaged,
+      appVersion: app.getVersion(),
+      runtimeRpc,
+      onStatus: publishDesktopRelayStatus
+    })
+    state.desktopRelayService = relayService
+    runtimeRpc.setMobileRelayPairingProvider(relayService)
+    relayService.start()
+    powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
   } catch (error) {
     console.warn(
       '[relay] Desktop relay startup unavailable:',

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { MobilePairingPath } from '../../../../shared/mobile-pairing-path'
 import { useAppStore } from '@/store'
 import type { MobileRelayStatusDetail } from '../../../../shared/mobile-relay-status'
 
@@ -29,8 +30,16 @@ export function useMobileRelayStatus(): MobileRelayStatusDetail {
   return detail
 }
 
-export function useMobileRelayAuthorization(): boolean {
+export function useMobileRelayAuthorization(path: MobilePairingPath = 'automatic'): {
+  relayAuthorized: boolean
+  configurationId?: string
+} {
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const { selfHosted } = useMobileRelayStatus()
-  return selfHosted === true || signedIn
+  return path === 'self-hosted'
+    ? {
+        relayAuthorized: selfHosted?.configured === true,
+        configurationId: selfHosted?.configurationId
+      }
+    : { relayAuthorized: signedIn }
 }

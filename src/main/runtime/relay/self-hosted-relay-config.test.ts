@@ -2,22 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { getSelfHostedRelayConfig, selfHostedRelayAuthContext } from './self-hosted-relay-config'
 
 const env = {
-  ORCA_RELAY_SELF_HOSTED_URL: 'https://relay.example.test',
-  ORCA_RELAY_SELF_HOSTED_KEY: 'owner-access-key-with-at-least-32-characters'
+  url: 'https://relay.example.test',
+  accessKey: 'owner-access-key-with-at-least-32-characters'
 }
 
 describe('self-hosted desktop Relay configuration', () => {
   it('leaves ordinary builds unchanged and scopes owner identity to the chosen server', () => {
-    expect(getSelfHostedRelayConfig({}, true)).toBeUndefined()
     const config = getSelfHostedRelayConfig(env, true)!
     expect(config.relayTokenEndpoint).toBe('https://relay.example.test/v1/host-token')
     expect(selfHostedRelayAuthContext(config)).toEqual({
       identity: {
         userId: 'self-hosted',
-        profileId: env.ORCA_RELAY_SELF_HOSTED_URL,
+        profileId: env.url,
         organizationId: ''
       },
-      accessToken: env.ORCA_RELAY_SELF_HOSTED_KEY,
+      accessToken: env.accessKey,
       relayEntitled: true
     })
   })
@@ -31,20 +30,12 @@ describe('self-hosted desktop Relay configuration', () => {
       'https://relay.example.test?key=value',
       'not-a-url'
     ]) {
-      expect(() =>
-        getSelfHostedRelayConfig({ ...env, ORCA_RELAY_SELF_HOSTED_URL: url }, true)
-      ).toThrow()
+      expect(() => getSelfHostedRelayConfig({ ...env, url: url }, true)).toThrow()
     }
-    expect(() =>
-      getSelfHostedRelayConfig({ ORCA_RELAY_SELF_HOSTED_URL: env.ORCA_RELAY_SELF_HOSTED_URL }, true)
-    ).toThrow()
-    expect(() =>
-      getSelfHostedRelayConfig({ ...env, ORCA_RELAY_SELF_HOSTED_KEY: 'short' }, true)
-    ).toThrow()
-    const local = { ...env, ORCA_RELAY_SELF_HOSTED_URL: 'http://127.0.0.1:8080' }
+    expect(() => getSelfHostedRelayConfig({ url: env.url, accessKey: '' }, true)).toThrow()
+    expect(() => getSelfHostedRelayConfig({ ...env, accessKey: 'short' }, true)).toThrow()
+    const local = { ...env, url: 'http://127.0.0.1:8080' }
     expect(() => getSelfHostedRelayConfig(local, true)).toThrow()
-    expect(getSelfHostedRelayConfig(local, false)?.relayDirectorUrl).toBe(
-      local.ORCA_RELAY_SELF_HOSTED_URL
-    )
+    expect(getSelfHostedRelayConfig(local, false)?.relayDirectorUrl).toBe(local.url)
   })
 })

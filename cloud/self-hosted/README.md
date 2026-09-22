@@ -49,32 +49,25 @@ same HTTPS origin. Do not expose the container's plain HTTP port publicly.
 
 ## Desktop and phone
 
-The desktop build must include this feature. Before launching it, set:
+The desktop build must include this feature. Open **Settings → Mobile**, select
+**Self-hosted Relay**, enter the server's HTTPS URL and `RELAY_ACCESS_KEY`, then
+click **Save Relay**. The desktop stores the key encrypted by the OS keyring;
+unlock it if prompted. No desktop environment variables or restart are needed.
 
-```text
-ORCA_RELAY_SELF_HOSTED_URL=https://relay.example.com
-ORCA_RELAY_SELF_HOSTED_KEY=<RELAY_ACCESS_KEY from the server>
-```
+Generate a pairing code and scan it with an Orca mobile release that supports
+Relay v2. Android and iOS use their existing Relay transport; the owner key is
+never sent to the phone.
 
-These are process environment variables, not agent-terminal settings. On macOS,
-launch the app executable from the configured shell; on Linux, launch the Orca
-executable from that shell. On Windows, set the two variables in PowerShell
-before launching `Orca.exe`. Quit an already-running instance first so the new
-process receives them. For subsequent launches, keep them in a private launcher
-or the environment used by your desktop session.
+**Orca Relay**, its **Sign in for Relay** action, **Self-hosted Relay**, and **LAN**
+remain available as separate choices. The choice applies to the next pairing.
+Official and self-hosted devices can connect to the same desktop concurrently;
+signing out of Cloud or removing the self-hosted configuration affects only that
+provider. A failed self-hosted invite does not silently fall back to official Relay.
 
-Without these variables, **Orca Relay** and its **Sign in for Relay** action stay
-unchanged. Explicit self-hosted configuration selects the self-hosted provider;
-invalid or incomplete values disable Relay startup instead of falling back to
-Cloud. Remove both variables and relaunch to return to the official provider.
-
-Open **Settings → Mobile**, select **Self-hosted Relay**, and generate a pairing
-code. Scan it with an Orca mobile release that supports Relay v2. Android and iOS
-use their existing Relay transport; no mobile protocol change is needed.
-
-An existing phone pairing keeps its previous relay credentials. Remove that host
-on the phone and pair again to move it to the new relay. Automatic discovery of
-changing LAN addresses is separate from this feature.
+An existing phone pairing keeps its previous Relay. Remove that host on the phone
+and pair again to move it to another Relay, or after replacing the self-hosted
+server's public origin. Updating settings clears the displayed self-hosted code.
+Automatic discovery of changing LAN addresses is separate from this feature.
 
 ## Keys and limits
 

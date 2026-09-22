@@ -1,5 +1,6 @@
 import { cleanCloudServiceOrigin } from '../../../shared/cloud-service-url'
 import type { RelayAuthContext } from './relay-auth-coordinator'
+import type { SelfHostedRelaySettings } from '../../../shared/mobile-relay-provider'
 
 export type SelfHostedRelayConfig = {
   relayDirectorUrl: string
@@ -8,14 +9,11 @@ export type SelfHostedRelayConfig = {
 }
 
 export function getSelfHostedRelayConfig(
-  env: NodeJS.ProcessEnv,
+  settings: SelfHostedRelaySettings,
   packaged: boolean
-): SelfHostedRelayConfig | undefined {
-  const url = env.ORCA_RELAY_SELF_HOSTED_URL?.trim()
-  const accessKey = env.ORCA_RELAY_SELF_HOSTED_KEY?.trim()
-  if (url === undefined && accessKey === undefined) {
-    return undefined
-  }
+): SelfHostedRelayConfig {
+  const url = settings.url.trim()
+  const accessKey = settings.accessKey.trim()
   const relayDirectorUrl = cleanCloudServiceOrigin(url, !packaged)
   if (
     !relayDirectorUrl ||

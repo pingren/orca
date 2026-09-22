@@ -34,8 +34,8 @@ export function effectiveMobilePairingConnectionMode(args: {
  * generation on this rather than silently degrading to local-only.
  */
 export function canMintMobilePairingOffer(args: {
-  connectionMode: MobilePairingConnectionMode
+  connectionMode: MobilePairingConnectionMode | 'self-hosted'
   relayAuthorized: boolean
 }): boolean {
-  return !(args.connectionMode === 'automatic' && !args.relayAuthorized)
+  return args.connectionMode === 'local-only' || args.relayAuthorized
 }

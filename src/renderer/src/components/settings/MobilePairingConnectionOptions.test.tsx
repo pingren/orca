@@ -79,12 +79,29 @@ describe('MobilePairingConnectionOptions', () => {
 
   afterEach(() => cleanup())
 
+  it('keeps official sign-in selectable after configuring self-hosted Relay', async () => {
+    vi.mocked(window.api.mobile.getRelayStatus).mockResolvedValue({
+      status: 'offline',
+      selfHosted: { configured: true, status: 'standby', url: 'https://relay.example.com' }
+    })
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    const view = render(<MobilePairingConnectionOptions value="self-hosted" onChange={onChange} />)
+    expect(screen.getAllByRole('radio')).toHaveLength(3)
+    await user.click(screen.getByRole('radio', { name: /Orca Relay/i }))
+    expect(onChange).toHaveBeenCalledWith('automatic')
+    view.rerender(<MobilePairingConnectionOptions value="automatic" onChange={onChange} />)
+    await user.click(screen.getByRole('button', { name: 'Sign in for Relay' }))
+    expect(connect).toHaveBeenCalledOnce()
+    expect(screen.getByRole('radio', { name: /Self-hosted Relay/i })).toBeVisible()
+  })
+
   it('shows the self-hosted relay without asking for a cloud sign-in', async () => {
     vi.mocked(window.api.mobile.getRelayStatus).mockResolvedValue({
       status: 'standby',
-      selfHosted: true
+      selfHosted: { configured: true, status: 'standby' }
     })
-    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+    render(<MobilePairingConnectionOptions value="self-hosted" onChange={vi.fn()} />)
     await waitFor(() =>
       expect(screen.getByRole('radio', { name: /Self-hosted Relay/i })).toBeEnabled()
     )
@@ -93,7 +110,7 @@ describe('MobilePairingConnectionOptions', () => {
     expect(connect).not.toHaveBeenCalled()
   })
 
-  it.each([undefined, false])(
+  it.each([undefined, { configured: true, status: 'standby' as const }])(
     'keeps official Relay sign-in when selfHosted is %s',
     async (selfHosted) => {
       vi.mocked(window.api.mobile.getRelayStatus).mockResolvedValue({
@@ -110,7 +127,7 @@ describe('MobilePairingConnectionOptions', () => {
       const signInPanel = screen.getByTestId('anywhere-sign-in-panel')
       const signIn = screen.getByRole('button', { name: 'Sign in for Relay' })
       expect(signInPanel).toBeVisible()
-      expect(screen.queryByRole('radio', { name: /Self-hosted Relay/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: /Self-hosted Relay/i })).toBeInTheDocument()
       expect(screen.getByText('Relay only — LAN does not need an account.')).toBeVisible()
       // Why: CTA must sit between Relay and LAN so it is not buried under LAN.
       expect(
@@ -124,7 +141,7 @@ describe('MobilePairingConnectionOptions', () => {
       // own — and its label must not double-announce the button it wraps.
       const group = screen.getByRole('radiogroup')
       expect(within(group).queryAllByRole('group')).toHaveLength(0)
-      expect(within(group).getAllByRole('radio')).toHaveLength(2)
+      expect(within(group).getAllByRole('radio')).toHaveLength(3)
       expect(signInPanel).not.toHaveAttribute('aria-label')
       // Why: do not surface build-setup diagnostics in the pairing flow.
       expect(screen.queryByText(/not configured for this build/i)).toBeNull()
@@ -186,7 +203,7 @@ describe('MobilePairingConnectionOptions', () => {
 
     screen.getByRole('radio', { name: /^LAN\b/i }).focus()
     await user.keyboard('{ArrowUp}')
-    expect(onChange).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalledWith('self-hosted')
   })
 
   it('moves selection with the arrow keys as a radiogroup', async () => {
@@ -196,7 +213,7 @@ describe('MobilePairingConnectionOptions', () => {
 
     screen.getByRole('radio', { name: /Orca Relay/i }).focus()
     await user.keyboard('{ArrowDown}')
-    expect(onChange).toHaveBeenCalledWith('local-only')
+    expect(onChange).toHaveBeenCalledWith('self-hosted')
   })
 
   it('does not change path when arrow keys hit the Sign in control', async () => {
@@ -282,7 +299,7 @@ describe('MobilePairingConnectionOptions', () => {
       )
     )
     // Why: the line is a diagnostic, not an option; it must not join the group.
-    expect(within(screen.getByRole('radiogroup')).getAllByRole('radio')).toHaveLength(2)
+    expect(within(screen.getByRole('radiogroup')).getAllByRole('radio')).toHaveLength(3)
 
     statusListener?.({ status: 'offline' })
     await waitFor(() => expect(screen.queryByTestId('relay-cell-line')).toBeNull())

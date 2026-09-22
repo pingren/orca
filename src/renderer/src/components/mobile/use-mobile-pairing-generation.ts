@@ -1,10 +1,11 @@
+import {
+  mobilePairingPathOptions,
+  type MobilePairingPath
+} from '../../../../shared/mobile-pairing-path'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import {
-  canMintMobilePairingOffer,
-  type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
+import { canMintMobilePairingOffer } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MutableRef<T> = { current: T }
@@ -16,7 +17,7 @@ type MutableRef<T> = { current: T }
  * clear any QR.
  */
 export function useMobilePairingGeneration(params: {
-  connectionMode: MobilePairingConnectionMode
+  connectionMode: MobilePairingPath
   relayAuthorized: boolean
   selectedAddress: string | undefined
   mountedRef: MutableRef<boolean>
@@ -34,7 +35,7 @@ export function useMobilePairingGeneration(params: {
   generatePairing: (
     rotate: boolean,
     addressOverride?: string,
-    connectionModeOverride?: MobilePairingConnectionMode
+    connectionModeOverride?: MobilePairingPath
   ) => Promise<void>
 } {
   const {
@@ -57,7 +58,7 @@ export function useMobilePairingGeneration(params: {
     async (
       rotate: boolean,
       addressOverride?: string,
-      connectionModeOverride?: MobilePairingConnectionMode
+      connectionModeOverride?: MobilePairingPath
     ) => {
       const preferredMode = connectionModeOverride ?? connectionMode
       if (!canMintMobilePairingOffer({ connectionMode: preferredMode, relayAuthorized })) {
@@ -72,7 +73,7 @@ export function useMobilePairingGeneration(params: {
         const address = addressOverride ?? selectedAddress
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
-          connectionMode: preferredMode,
+          ...mobilePairingPathOptions(preferredMode),
           ...(rotate ? { rotate: true } : {})
         })
         if (requestId !== pairingRequestIdRef.current) {

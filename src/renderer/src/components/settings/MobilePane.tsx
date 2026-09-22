@@ -1,3 +1,8 @@
+import {
+  mobilePairingPathOptions,
+  mobilePairingPathSettings,
+  type MobilePairingPath
+} from '../../../../shared/mobile-pairing-path'
 import { useMobileRelayAuthorization } from '../mobile/use-mobile-relay-status'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -18,10 +23,7 @@ import { MobilePairingSetupSection } from './MobilePairingSetupSection'
 import { MobileRelayMintFailureNotice } from '../mobile/mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from '../mobile/WindowsFirewallNotice'
 import { translate } from '@/i18n/i18n'
-import {
-  canMintMobilePairingOffer,
-  type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
+import { canMintMobilePairingOffer } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
@@ -43,12 +45,13 @@ export function MobilePane(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
-  const relayAuthorized = useMobileRelayAuthorization()
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
+  const { relayAuthorized, configurationId } = useMobileRelayAuthorization(connectionMode)
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const wasAuthorizedRef = useRef(relayAuthorized)
+  const wasConfigurationRef = useRef(configurationId)
   // Why: monotonically bumped per pairing request so a late getPairingQR
   // response cannot paint a stale QR after sign-out, a mode switch, or an
   // address change invalidated the request that produced it.
@@ -121,10 +124,15 @@ export function MobilePane(): React.JSX.Element {
   useEffect(() => {
     const wasAuthorized = wasAuthorizedRef.current
     wasAuthorizedRef.current = relayAuthorized
-    if (wasAuthorized && !relayAuthorized && connectionMode === 'automatic') {
+    const changedConfiguration = wasConfigurationRef.current !== configurationId
+    wasConfigurationRef.current = configurationId
+    if (
+      ((wasAuthorized && !relayAuthorized) || changedConfiguration) &&
+      connectionMode !== 'local-only'
+    ) {
       invalidatePairing()
     }
-  }, [relayAuthorized, connectionMode, invalidatePairing])
+  }, [relayAuthorized, configurationId, connectionMode, invalidatePairing])
 
   const clearCodeCopiedResetTimer = useCallback((): void => {
     if (codeCopiedResetTimerRef.current !== null) {
@@ -172,7 +180,7 @@ export function MobilePane(): React.JSX.Element {
     async (
       opts: {
         rotate?: boolean
-        connectionModeOverride?: MobilePairingConnectionMode
+        connectionModeOverride?: MobilePairingPath
       } = {}
     ) => {
       const preferredMode = opts.connectionModeOverride ?? connectionMode
@@ -187,7 +195,7 @@ export function MobilePane(): React.JSX.Element {
       try {
         const result = await window.api.mobile.getPairingQR({
           ...(selectedAddress ? { address: selectedAddress } : {}),
-          connectionMode: preferredMode,
+          ...mobilePairingPathOptions(preferredMode),
           ...(opts.rotate || rotateNextQr ? { rotate: true } : {})
         })
         // Why: sign-out, a mode switch, or an address change bump the epoch.
@@ -263,7 +271,7 @@ export function MobilePane(): React.JSX.Element {
   )
 
   const changeConnectionMode = useCallback(
-    (nextMode: MobilePairingConnectionMode) => {
+    (nextMode: MobilePairingPath) => {
       if (nextMode === connectionMode) {
         return
       }
@@ -271,7 +279,7 @@ export function MobilePane(): React.JSX.Element {
       // instead of snapping back to the default.
       handledModeRef.current = nextMode
       setConnectionMode(nextMode)
-      void updateSettings({ mobilePairingConnectionMode: nextMode })
+      void updateSettings(mobilePairingPathSettings(nextMode))
       // Why: after a Relay mint failure, LAN should mint immediately — including
       // when the renderer has not chosen an address yet (main picks the default).
       const shouldRecoverWithLan = relayMintFailure != null && nextMode === 'local-only'
@@ -397,9 +405,9 @@ export function MobilePane(): React.JSX.Element {
           <MobilePairingConnectionOptions
             value={connectionMode}
             onChange={changeConnectionMode}
-            relayMintFailed={relayMintFailure != null && connectionMode === 'automatic'}
+            relayMintFailed={relayMintFailure != null && connectionMode !== 'local-only'}
             relayMintRetrying={
-              relayMintFailure != null && connectionMode === 'automatic' && loading
+              relayMintFailure != null && connectionMode !== 'local-only' && loading
             }
           />
         }
@@ -418,8 +426,9 @@ export function MobilePane(): React.JSX.Element {
         onGenerateQr={() => void generateQR({ rotate: qrDataUrl != null })}
       />
 
-      {relayMintFailure != null && connectionMode === 'automatic' ? (
+      {relayMintFailure != null && connectionMode !== 'local-only' ? (
         <MobileRelayMintFailureNotice
+          selfHosted={connectionMode === 'self-hosted'}
           failure={relayMintFailure}
           onUseLan={() => changeConnectionMode('local-only')}
           onRetry={() => void generateQR({ rotate: true })}
@@ -450,7 +459,7 @@ export function MobilePane(): React.JSX.Element {
       <WindowsFirewallNotice
         pairingReady={pairingUrl != null}
         address={selectedAddress}
-        usingRelay={connectionMode === 'automatic'}
+        usingRelay={connectionMode !== 'local-only'}
       />
 
       <MobilePairedDevicesSection

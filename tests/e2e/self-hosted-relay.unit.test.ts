@@ -73,6 +73,7 @@ it('pairs, exchanges encrypted RPC, resumes and revokes through a self-hosted re
     const keypair = { ...keys, publicKeyB64: Buffer.from(keys.publicKey).toString('base64') }
     const registry = new DeviceRegistry(userDataPath)
     const device = registry.addDevice('Phone', 'mobile')
+    registry.setMobilePairingConnectionMode(device.deviceId, 'automatic', 'self-hosted')
     let authenticatedSocket: AuthenticatedMobileSocket | undefined
     const wiring = new MobileSocketWiring({
       deviceRegistry: registry,
@@ -86,13 +87,14 @@ it('pairs, exchanges encrypted RPC, resumes and revokes through a self-hosted re
     })
     const desktop = getSelfHostedRelayConfig(
       {
-        ORCA_RELAY_SELF_HOSTED_URL: origin,
-        ORCA_RELAY_SELF_HOSTED_KEY: accessKey
+        url: origin,
+        accessKey
       },
       true
     )!
     const context = selfHostedRelayAuthContext(desktop)
     broker = await RelaySessionBroker.connect({
+      relayProvider: 'self-hosted',
       authConfig: desktop,
       accessToken: context.accessToken,
       identity: context.identity,
@@ -172,6 +174,7 @@ it('pairs, exchanges encrypted RPC, resumes and revokes through a self-hosted re
     const resumed = await connectPhone(resumeToken)
     expect(authenticatedSocket?.transport).toMatchObject({
       transport: 'relay',
+      relayProvider: 'self-hosted',
       credentialKind: 'resume'
     })
     await broker.revokeDevice(device.deviceId)

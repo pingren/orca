@@ -85,6 +85,7 @@ export class DesktopRelayService {
       openBroker: async ({ context, isCurrent, refreshAccessToken }) => {
         const broker = await RelaySessionBroker.connect({
           ...auth.brokerOptions,
+          relayProvider: this.selfHosted ? 'self-hosted' : 'official',
           accessToken: context.accessToken,
           identity: context.identity,
           keypair,

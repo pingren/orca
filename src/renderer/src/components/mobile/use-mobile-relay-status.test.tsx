@@ -19,8 +19,8 @@ it('authorizes signed-out pairing only when the runtime reports self-hosted cred
     configurable: true,
     value: { mobile: { getRelayStatus: () => status, onRelayStatusChanged: () => () => {} } }
   })
-  const hook = renderHook(() => useMobileRelayAuthorization())
-  expect(hook.result.current).toBe(false)
-  resolveStatus({ status: 'standby', selfHosted: true })
-  await waitFor(() => expect(hook.result.current).toBe(true))
+  const hook = renderHook(() => useMobileRelayAuthorization('self-hosted'))
+  expect(hook.result.current.relayAuthorized).toBe(false)
+  resolveStatus({ status: 'standby', selfHosted: { configured: true, status: 'standby' } })
+  await waitFor(() => expect(hook.result.current.relayAuthorized).toBe(true))
 })
